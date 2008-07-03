@@ -1,0 +1,1 @@
+This is the beginnings of a python port of the ActiveMerchant library. So far only Authorize.net ARB is working. Still working on tests and documentation.
