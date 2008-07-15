@@ -15,8 +15,8 @@ def setup_subscribe():
         'occurrences': '2'
     }
     billing_address = {
-        'first_name': 'John',
-        'last_name': 'Doe'
+        'first_name': 'Mal',
+        'last_name': 'Reynolds'
     }
 
     options = {
@@ -37,8 +37,8 @@ def setup_update():
         'occurrences': '3'
     }
     billing_address = {
-        'first_name': 'Aaron',
-        'last_name': 'Farnham'
+        'first_name': 'Mal',
+        'last_name': 'Reynolds'
     }
 
     options = {
