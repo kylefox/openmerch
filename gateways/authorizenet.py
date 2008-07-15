@@ -2,7 +2,31 @@ from base import Gateway
 from StringIO import StringIO
 import xml.etree.ElementTree as ET
 
-from post import post
+from openmerch.post import post
+
+# For more information on the Authorize.Net Gateway please visit their {Integration Center}[http://developer.authorize.net/]
+
+# The login and password are not the username and password you use to
+# login to the Authorize.Net Merchant Interface. Instead, you will
+# use the API Login ID as the login and Transaction Key as the
+# password.
+#
+# ==== How to Get Your API Login ID and Transaction Key
+#
+# 1. Log into the Merchant Interface
+# 2. Select Settings from the Main Menu
+# 3. Click on API Login ID and Transaction Key in the Security section
+# 4. Type in the answer to the secret question configured on setup
+# 5. Click Submit
+#
+# ==== Automated Recurring Billing (ARB)
+#
+# Automated Recurring Billing (ARB) is an optional service for submitting and managing recurring, or subscription-based, transactions.
+#
+# To use recurring, update_recurring, and cancel_recurring ARB must be enabled for your account.
+#
+# Information about ARB is available on the {Authorize.Net website}[http://www.authorize.net/solutions/merchantsolutions/merchantservices/automatedrecurringbilling/].
+# Information about the ARB API is available at the {Authorize.Net Integration Center}[http://developer.authorize.net/]
 
 class AuthorizeNet(Gateway):
     API_VERSION = '3.1'
@@ -38,6 +62,11 @@ class AuthorizeNet(Gateway):
         super(AuthorizeNet, self).__init__(gateway_mode=gateway_mode)
 
     def recurring(self, money, creditcard, **kwargs):
+        '''
+        Create a recurring subscription with Authorize.net ARB
+        and return a dictionary with keys and values representing 
+        the elements of the ARB Response.
+        '''
         assert(kwargs.has_key('interval') and
                kwargs.has_key('duration') and
                kwargs.has_key('billing_address'))
@@ -61,6 +90,12 @@ class AuthorizeNet(Gateway):
         return self.recurring_commit(u'create', request)
 
     def update_recurring(self, money, creditcard, **kwargs):
+        '''
+        Update an existing subscription with ARB. This requires
+        the subscriptionId for the subscription being updated. 
+        The subscriptionId is returned after a successful call
+        to the "recurring" method.
+        '''
         assert(kwargs.has_key('subscription_id'))
 
         #Create a copy of kwargs and call it options. This is not 
@@ -74,11 +109,21 @@ class AuthorizeNet(Gateway):
         return self.recurring_commit(u'update', request)
 
     def cancel_recurring(self, subscription_id):
+        '''
+        Cancel an existing subscription with ARB. This requires
+        the subscriptionId for the subscription being canceled. 
+        The subscriptionId is returned after a successful call
+        to the "recurring" method.
+        '''
         request = self.build_recurring_request('cancel', {'subscription_id': subscription_id})
         return self.recurring_commit(u'cancel', request)
         
         
     def build_recurring_request(self, action, options):
+        '''
+        Create an XML Request for communication with ARB. This method
+        works for all actions: create, update, and cancel.
+        '''
         if not self.RECURRING_ACTIONS.has_key(action):
             raise StandardError, u"Invalid Automated Recurring Billing Action: " + unicode(action)
 
@@ -102,6 +147,9 @@ class AuthorizeNet(Gateway):
         return requestbuff.getvalue()
 
     def add_se(self, node, name, text):
+        '''
+        A helper method for adding a subnode to an ElementTree node
+        '''
         subnode = ET.SubElement(node, name)
         subnode.text = text
         return subnode
@@ -248,7 +296,6 @@ class AuthorizeNet(Gateway):
         else:
             url = self.arb_live_url
         xml = post(url, request, {"Content-Type": "text/xml"})
-        print 'RESPONSE: ', xml
         response = self.recurring_parse('create', xml.decode('utf-8-sig'))
         return response
 
@@ -264,7 +311,6 @@ class AuthorizeNet(Gateway):
         xml = ET.parse(StringIO(xml))
         root = xml.getroot()
         root_tag = self.normalize(root.tag)
-        print "ROOT TAG: ", self.normalize(root_tag)
 
         if root_tag == "%sResponse"%(self.RECURRING_ACTIONS[action]) or root_tag == "ErrorResponse":
             response[root_tag] = True
