@@ -156,7 +156,7 @@ class AuthorizeNet(Gateway):
             self.add_arb_interval(payment_schedule, options)
             self.add_arb_duration(payment_schedule, options)
             if 'trial' in options.keys() and options['trial']:
-                self.add_se(payment_schedule, 'trialOccurrences', options['trial']['trialOccurrences'])
+                self.add_se(payment_schedule, 'trialOccurrences', options['trial']['occurrences'])
 
     def add_arb_payment(self, subscription, options):
         #if not 'credit_card' in options.keys() or 'bank_account' in options.keys():
