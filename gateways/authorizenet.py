@@ -1,6 +1,9 @@
 from base import Gateway
 from StringIO import StringIO
-import xml.etree.ElementTree as ET
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    import elementtree.ElementTree as ET
 
 from openmerch.post import post
 
