@@ -5,6 +5,71 @@ from datetime import datetime
 LOGIN = ''
 PASSWORD = ''
 
+def setup_authorize():
+    options = {
+        'order_id': '1',
+        'description': 'Test of AUTH code',
+        'email': 'john@doe.com',
+        'customer': '947',
+        'ip': '192.168.1.1',
+    }
+
+    billing_address = {
+        'address1': '444 Main St.',
+        'company': 'ACME Software',
+        'phone': '222-222-2222',
+        'zip': '77777',
+        'city': 'Dallas',
+        'country': 'USA',
+        'state': 'TX'
+    }
+
+    options['billing_address'] = billing_address
+
+    return options
+
+def setup_purchase():
+    options = {
+        'order_id': '1',
+        'description': 'Test of AUTH code',
+        'email': 'john@doe.com',
+        'customer': '947',
+        'ip': '192.168.1.1',
+    }
+
+    billing_address = {
+        'address1': '444 Main St.',
+        'company': 'ACME Software',
+        'phone': '222-222-2222',
+        'zip': '77777',
+        'city': 'Dallas',
+        'country': 'USA',
+        'state': 'TX'
+    }
+
+    options['billing_address'] = billing_address
+
+    return options
+
+def setup_capture():
+    options = {
+        'email': 'john@doe.com',
+        'customer': '947',
+        'ip': '192.168.1.1',
+    }
+
+    return options
+
+def setup_void():
+    pass
+
+def setup_credit():
+    options = {
+        'order_id': '1',
+        'description': 'Test of AUTH code',
+    }
+    return options
+
 def setup_subscribe():
     interval = {
         'length': '1',

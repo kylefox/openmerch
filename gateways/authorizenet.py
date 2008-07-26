@@ -5,6 +5,7 @@ try:
 except ImportError:
     import elementtree.ElementTree as ET
 
+import re
 from openmerch.post import post
 
 # For more information on the Authorize.Net Gateway please visit their {Integration Center}[http://developer.authorize.net/]
@@ -63,6 +64,239 @@ class AuthorizeNet(Gateway):
         assert(options.has_key('password'))
         self.options = options
         super(AuthorizeNet, self).__init__(gateway_mode=gateway_mode)
+
+    def authorize(self, money, creditcard, **kwargs):
+        """Performs an authorization, which reserves the funds on the customer's credit card, but does not charge the card.
+
+       Parameters
+       * money -- The amount to be authorized. Either an Integer value in cents or a Money object.
+       * creditcard -- The CreditCard details for the transaction.
+       * options-- A hash of optional parameters.
+        """
+        post = {}
+        self.add_invoice(post, options)
+        self.add_creditcard(post, creditcard)
+        self.add_address(post, options)
+        self.add_customer_data(post,options)
+
+        self.commit('AUTH_ONLY', money, post)
+
+    def purchase(self, money, creditcard, options = {}):
+        """Perform a purchase, which is essentially an authorization and capture in a single operation.
+
+          Parameters
+      
+          * money -- The amount to be purchased. Either an Integer value in cents or a Money object.
+          * creditcard -- The CreditCard details for the transaction.
+          * options -- A hash of optional parameters."""
+        post = {}
+        self.add_invoice(post, options)
+        self.add_creditcard(post, creditcard)
+        self.add_address(post, options)
+        self.add_customer_data(post, options)
+ 
+        self.commit('AUTH_CAPTURE', money, post)
+        
+      # Captures the funds from an authorized transaction.
+      #
+      # ==== Parameters
+      #
+      # * <tt>money</tt> -- The amount to be captured. Either an Integer value in cents or a Money object.
+      # * <tt>authorization</tt> -- The authorization returned from the previous authorize request.
+    def capture(self, money, authorization, options = {}):
+        post = {'trans_id': authorization}
+        self.add_customer_data(post, options)
+        self.commit('PRIOR_AUTH_CAPTURE', money, post)
+      
+ 
+      # Void a previous transaction
+      #
+      # ==== Parameters
+      #
+      # * <tt>authorization</tt> - The authorization returned from the previous authorize request.
+    def void(self, authorization, options = {}):
+        post = {'trans_id': authorization}
+        self.commit('VOID', None, post)
+ 
+ 
+      # Credit an account.
+      #
+      # This transaction is also referred to as a Refund and indicates to the gateway that
+      # money should flow from the merchant to the customer.
+      #
+      # ==== Parameters
+      #
+      # * <tt>money</tt> -- The amount to be credited to the customer. Either an Integer value in cents or a Money object.
+      # * <tt>identification</tt> -- The ID of the original transaction against which the credit is being issued.
+      # * <tt>options</tt> -- A hash of parameters.
+      #
+      # ==== Options
+      #
+      # * <tt>:card_number</tt> -- The credit card number the credit is being issued to. (REQUIRED)
+    def credit(self, money, identification, options = {}):
+        #requires!(options, :card_number)
+        assert('card_number' in options)
+ 
+        post = { 'trans_id': identification,
+                 'card_num': options['card_number']
+               }
+        self.add_invoice(post, options)
+ 
+        self.commit('CREDIT', money, post)
+
+
+    def commit(self, action, money, parameters):
+        if not action == 'VOID':
+            parameters['amount'] = amount(money)
+ 
+        # Only activate the test_request when the :test option is passed in
+        if self.options['test']:
+            parameters['test_request'] = 'TRUE'
+        else:
+            parameters['test_request'] = 'FALSE'
+
+        #url = test? ? self.test_url : self.live_url
+        if self.is_test():
+            url = self.test_url
+        else:
+            url = self.live_url
+        data = ssl_post(url, post_data(action, parameters))
+ 
+        response = self.parse(data)
+ 
+        message = self.message_from(response)
+ 
+        # Return the response. The authorization can be taken out of the transaction_id
+        # Test Mode on/off is something we have to parse from the response text.
+        # It usually looks something like this
+        #
+        # (TESTMODE) Successful Sale
+
+        pattern = re.compile('TESTMODE')
+        if self.is_test() or pattern.search(message):
+            test_mode = True
+        else:
+            test_mode = False
+        #test_mode = test? || message =~ /TESTMODE/
+ 
+        return Response(self.is_success(response), message, response,
+          {'test': test_mode,
+          'authorization': response['transaction_id'],
+          'fraud_review': self.is_fraud_review(response),
+          'avs_result': { 'code': response['avs_result_code'] },
+          'cvv_result': response['card_code']}
+        )
+ 
+    def is_success(self, response):
+        response['response_code'] == self.APPROVED
+ 
+    def is_fraud_review(self, response):
+        response['response_code'] == self.FRAUD_REVIEW
+ 
+    def parse(self, body):
+        #fields = self.split(body)
+        fields = body.split(',')
+ 
+        results = {
+          'response_code': int(fields[self.RESPONSE_CODE]),
+          'response_reason_code': fields[self.RESPONSE_REASON_CODE],
+          'response_reason_text': fields[self.RESPONSE_REASON_TEXT],
+          'avs_result_code': fields[self.AVS_RESULT_CODE],
+          'transaction_id': fields[self.TRANSACTION_ID],
+          'card_code': fields[self.CARD_CODE_RESPONSE_CODE]
+        }
+        return results
+ 
+    def post_data(self, action, parameters = {}):
+        post = {}
+ 
+        post['version'] = self.API_VERSION
+        post['login'] = self.options['login']
+        post['tran_key'] = self.options['password']
+        post['relay_response'] = "FALSE"
+        post['type'] = action
+        post['delim_data'] = "TRUE"
+        post['delim_char'] = ","
+        post['encap_char'] = "$"
+
+        #request = post.merge(parameters).collect { |key, value| "x_#{key}=#{CGI.escape(value.to_s)}" }.join("&")
+        request = post.update(parameters)
+        return request
+       
+ 
+    def add_invoice(self, post, options):
+        post['invoice_num'] = options['order_id']
+        post['description'] = options['description']
+ 
+    def add_creditcard(post, creditcard):
+        post['card_num'] = creditcard.number
+        if creditcard.has_verification_value():
+            post['card_code'] = creditcard.verification_value
+        post['exp_date'] = expdate(creditcard)
+        post['first_name'] = creditcard.first_name
+        post['last_name'] = creditcard.last_name
+ 
+    def add_customer_data(self, post, options):
+        if 'email' in options:
+            post['email'] = options['email']
+            post['email_customer'] = false
+  
+ 
+        if 'customer' in options:
+            post['cust_id'] = options['customer']
+        
+ 
+        if 'ip' in options:
+            post['customer_ip'] = options['ip']
+ 
+    def add_address(post, options):
+        address = None
+        if 'billing_address' in options:
+            address = options['billing_address']
+        elif 'address' in options:
+            address = options['address']
+        if address:
+            post['address'] = str(address['address1'])
+            post['company'] = str(address['company'])
+            post['phone'] = str(address['phone'])
+            post['zip'] = str(address['zip'])
+            post['city'] = str(address['city'])
+            post['country'] = str(address['country'])
+            if self._is_blank(address['state']):
+                post['state'] = 'n/a'
+            else:
+                post['state'] = address['state']
+ 
+    def normalize(field):
+        'Make a python type out of the response string'
+        try:
+            return {'true': True,
+                    'false': False,
+                    '': None,
+                    'null': None}[field]
+        except KeyError:
+            return field
+ 
+    def message_from(results):
+        if results['response_code'] == self.DECLINED:
+            if results['card_code'] in self.CARD_CODE_ERRORS:
+                return CVVResult.messages[ results['card_code'] ]
+            if results['avs_result_code'] in self.AVS_ERRORS:
+                return AVSResult.messages[ results['avs_result_code'] ]
+        
+        if results['response_reason_text'] == None:
+            return ''
+        else:
+            return results['response_reason_text'][0:-1]
+ 
+    def expdate(creditcard):
+        year = "%.4d" % creditcard.year
+        month = "%.2d" % creditcard.month
+        return '%s%s' % (month, year[-2:])
+ 
+    #def split(response):
+    #    response[1:-1].split(/\$,\$/)
+
 
     def recurring(self, money, creditcard, **kwargs):
         '''

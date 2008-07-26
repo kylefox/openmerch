@@ -20,7 +20,7 @@ class CreditCard(object):
     require_verification_value = True
 
     def __init__(self,
-                 #essential attributes for validnon-bogus creditcards
+                 #essential attributes for valid, non-bogus creditcards
                  number, month, year, card_type, first_name, last_name,
                  #required for Switch / Solo cards
                  start_month=None, start_year=None, issue_number=None,
@@ -137,6 +137,8 @@ class CreditCard(object):
         return self.first_name and self.last_name
 
     def _is_blank(self, svar):
+        if svar == None:
+            return True
         return (not svar.strip() == '')
         
     def has_first_name(self):
