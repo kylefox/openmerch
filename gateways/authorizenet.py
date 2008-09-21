@@ -533,7 +533,7 @@ class AuthorizeNet(Gateway):
         else:
             url = self.arb_live_url
         xml = post(url, request, {"Content-Type": "text/xml"})
-        response = self.recurring_parse('create', xml.decode('utf-8-sig'))
+        response = self.recurring_parse(action, xml.decode('utf-8-sig'))
         return response
 
     def normalize(self, name):
@@ -553,6 +553,7 @@ class AuthorizeNet(Gateway):
             response[root_tag] = True
             for child in root.getchildren():
                 self.recurring_parse_element(response, child)
+
         return response
 
     def recurring_parse_element(self, response, node):
