@@ -1,5 +1,6 @@
 from base import Gateway
 from StringIO import StringIO
+from urllib import urlencode
 try:
     import xml.etree.ElementTree as ET
 except ImportError:
@@ -7,6 +8,7 @@ except ImportError:
 
 import re
 from openmerch.post import post
+from openmerch.response import Response
 
 # For more information on the Authorize.Net Gateway please visit their {Integration Center}[http://developer.authorize.net/]
 
@@ -89,13 +91,17 @@ class AuthorizeNet(Gateway):
           * money -- The amount to be purchased. Either an Integer value in cents or a Money object.
           * creditcard -- The CreditCard details for the transaction.
           * options -- A hash of optional parameters."""
-        post = {}
+        post = {
+          'login': self.options['login'],
+          'trans_id': self.options['password']
+        }
+
         self.add_invoice(post, options)
         self.add_creditcard(post, creditcard)
         self.add_address(post, options)
         self.add_customer_data(post, options)
  
-        self.commit('AUTH_CAPTURE', money, post)
+        return self.commit('AUTH_CAPTURE', money, post)
         
       # Captures the funds from an authorized transaction.
       #
@@ -147,7 +153,7 @@ class AuthorizeNet(Gateway):
 
     def commit(self, action, money, parameters):
         if not action == 'VOID':
-            parameters['amount'] = amount(money)
+            parameters['amount'] = self.amount(money)
  
         # Only activate the test_request when the :test option is passed in
         if self.options['test']:
@@ -160,7 +166,9 @@ class AuthorizeNet(Gateway):
             url = self.test_url
         else:
             url = self.live_url
-        data = ssl_post(url, post_data(action, parameters))
+        
+        url = url + self.post_data(action, parameters)
+        data = post(url, {})
  
         response = self.parse(data)
  
@@ -194,8 +202,7 @@ class AuthorizeNet(Gateway):
         response['response_code'] == self.FRAUD_REVIEW
  
     def parse(self, body):
-        #fields = self.split(body)
-        fields = body.split(',')
+        fields = [f[1:-1] for f in body.split(',')]
  
         results = {
           'response_code': int(fields[self.RESPONSE_CODE]),
@@ -219,20 +226,22 @@ class AuthorizeNet(Gateway):
         post['delim_char'] = ","
         post['encap_char'] = "$"
 
+        post.update(parameters)
         #request = post.merge(parameters).collect { |key, value| "x_#{key}=#{CGI.escape(value.to_s)}" }.join("&")
-        request = post.update(parameters)
-        return request
+        request = {}
+        [request.setdefault('x_' + key, value) for key, value in post.iteritems()]
+        return '?' + urlencode(request)
        
  
     def add_invoice(self, post, options):
         post['invoice_num'] = options['order_id']
         post['description'] = options['description']
  
-    def add_creditcard(post, creditcard):
+    def add_creditcard(self, post, creditcard):
         post['card_num'] = creditcard.number
         if creditcard.has_verification_value():
             post['card_code'] = creditcard.verification_value
-        post['exp_date'] = expdate(creditcard)
+        post['exp_date'] = self.expdate(creditcard)
         post['first_name'] = creditcard.first_name
         post['last_name'] = creditcard.last_name
  
@@ -249,7 +258,7 @@ class AuthorizeNet(Gateway):
         if 'ip' in options:
             post['customer_ip'] = options['ip']
  
-    def add_address(post, options):
+    def add_address(self, post, options):
         address = None
         if 'billing_address' in options:
             address = options['billing_address']
@@ -277,7 +286,7 @@ class AuthorizeNet(Gateway):
         except KeyError:
             return field
  
-    def message_from(results):
+    def message_from(self, results):
         if results['response_code'] == self.DECLINED:
             if results['card_code'] in self.CARD_CODE_ERRORS:
                 return CVVResult.messages[ results['card_code'] ]
@@ -289,15 +298,11 @@ class AuthorizeNet(Gateway):
         else:
             return results['response_reason_text'][0:-1]
  
-    def expdate(creditcard):
+    def expdate(self, creditcard):
         year = "%.4d" % creditcard.year
         month = "%.2d" % creditcard.month
         return '%s%s' % (month, year[-2:])
  
-    #def split(response):
-    #    response[1:-1].split(/\$,\$/)
-
-
     def recurring(self, money, creditcard, **kwargs):
         '''
         Create a recurring subscription with Authorize.net ARB

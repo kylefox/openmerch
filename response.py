@@ -4,6 +4,5 @@ class Response(object):
         self.message = message
         self.params = params
         self.test = options.setdefault('test', False)
-        self.authorization = options['authorizatoin']
+        self.authorization = options['authorization']
         self.fraud_review = options['fraud_review']
-    
