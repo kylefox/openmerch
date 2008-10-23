@@ -538,7 +538,7 @@ class AuthorizeNet(Gateway):
         else:
             url = self.arb_live_url
         xml = post(url, request, {"Content-Type": "text/xml"})
-        response = self.recurring_parse(action, xml.decode('utf-8-sig'))
+        response = self.recurring_parse(action, xml)
         return response
 
     def normalize(self, name):
